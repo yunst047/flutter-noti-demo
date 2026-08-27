@@ -1,3 +1,7 @@
+# xcodebuild's own output when a target is built directly (tool/add_widget_target.rb
+# workflow); Flutter's own artefacts go to the repo-root /build instead.
+build/
+
 **/dgph
 *.mode1v3
 *.mode2v3

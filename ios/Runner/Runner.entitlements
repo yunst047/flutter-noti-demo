@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shared with DeliveryWidget: the Live Activity's on-screen fields travel
+	     through this suite's UserDefaults, not through ContentState. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.f0h.flt-noti-demo</string>
+	</array>
+	<!-- Debug builds get an APNs *sandbox* token; TestFlight and the App Store
+	     get a production one. They are different tokens on different endpoints,
+	     and sending to the wrong one fails silently. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

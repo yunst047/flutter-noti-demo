@@ -3,11 +3,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/home_screen.dart';
+import 'screens/live_activity_screen.dart';
 import 'screens/live_update_screen.dart';
 import 'screens/local_noti_screen.dart';
 import 'screens/log_screen.dart';
 import 'screens/permission_screen.dart';
 import 'screens/push_screen.dart';
+import 'services/live_activity_service.dart';
 import 'services/live_update_service.dart';
 import 'services/local_noti_service.dart';
 import 'services/noti_log.dart';
@@ -19,6 +21,7 @@ final localNoti = LocalNotiService(plugin);
 final permissions = PermissionService(plugin);
 final push = PushService(localNoti);
 final liveUpdate = LiveUpdateService();
+final liveActivity = LiveActivityService();
 
 final _router = GoRouter(
   routes: [
@@ -27,6 +30,7 @@ final _router = GoRouter(
     GoRoute(path: '/local', builder: (_, _) => const LocalNotiScreen()),
     GoRoute(path: '/push', builder: (_, _) => const PushScreen()),
     GoRoute(path: '/live', builder: (_, _) => const LiveUpdateScreen()),
+    GoRoute(path: '/activity', builder: (_, _) => const LiveActivityScreen()),
     GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
   ],
 );
@@ -54,7 +58,15 @@ Future<void> main() async {
   // attacker-influenced input in principle, and go_router throws on a route it
   // does not recognise.
   push.onDeepLink = (route) {
-    const known = {'/', '/permissions', '/local', '/push', '/live', '/log'};
+    const known = {
+      '/',
+      '/permissions',
+      '/local',
+      '/push',
+      '/live',
+      '/activity',
+      '/log',
+    };
     if (!known.contains(route)) {
       NotiLog.instance.add('push', 'deep link ignored', 'unknown route $route');
       return;
@@ -66,6 +78,14 @@ Future<void> main() async {
     await push.init();
   } catch (e) {
     NotiLog.instance.add('push', 'init failed', '$e');
+  }
+
+  // Same treatment as push: a no-op on Android, and on an iOS build with no
+  // App Group configured it must not take the rest of the app down with it.
+  try {
+    await liveActivity.init();
+  } catch (e) {
+    NotiLog.instance.add('live', 'activity init failed', '$e');
   }
 
   runApp(const NotiDemoApp());

@@ -20,6 +20,16 @@ single Go backend so you can see exactly how each payload differs.
 The most useful artifact here is [`docs/PAYLOADS.md`](docs/PAYLOADS.md) — the real
 payload for every notification type, side by side.
 
+<p align="center">
+  <img src="docs/screenshots/ios-lockscreen-final.png" width="300" alt="iOS Live Activity on the Lock Screen" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/ios-dynamic-island-stage2.png" width="620" alt="The same activity in the Dynamic Island" />
+</p>
+
+More, and what each one is evidence of, in
+[`docs/screenshots/`](docs/screenshots/README.md).
+
 ## Repo layout
 
 This is the **app half**. The Go backend that sends the pushes lives in a separate
@@ -30,6 +40,8 @@ lib/
   services/     local noti, push, live activity, live update, permissions
   screens/      one screen per notification category
 docs/           setup checklist, testing matrix, payload reference, decisions
+  screenshots/  evidence for every "verified" claim about iOS
+  LIVE-ACTIVITY-API.md   what the backend still needs for push-driven Live Activities
 ```
 
 ## Running it
@@ -52,10 +64,11 @@ adb reverse tcp:8080 tcp:8080          # tunnels over the cable; re-run after re
 You must supply your own Firebase config — these files are gitignored by design:
 
 - `android/app/google-services.json`
-- `ios/Runner/GoogleService-Info.plist`
-- `lib/firebase_options.dart` (generate with `flutterfire configure`)
+- `ios/Runner/GoogleService-Info.plist`, then `ruby tool/link_google_services.rb` to put
+  it in the Runner target — on disk is not enough, and the failure is silent
 
-Full step-by-step in [`docs/SETUP.md`](docs/SETUP.md).
+Full step-by-step in [`docs/SETUP.md`](docs/SETUP.md); how the APNs → FCM chain fits
+together, and how to test each link separately, is in §D.4.
 
 ## Platform support status
 
@@ -63,7 +76,9 @@ Full step-by-step in [`docs/SETUP.md`](docs/SETUP.md).
 |---|---|
 | Android | Verified on a Galaxy S21 (Android 15 / API 35) |
 | Android Live Updates | Requires API 36.1+ — emulator only, see `docs/TESTING.md` |
-| iOS | Code present, **not yet verified on device** |
+| iOS app + Live Activity | Verified on an iPhone 17 Pro simulator (iOS 26.5) — Lock Screen and Dynamic Island, [screenshots](docs/screenshots/README.md) |
+| iOS push | Alert-type verified against the live backend; data-only and silent **cannot** be tested on a simulator, see `docs/TESTING.md` |
+| Live Activity over push | Needs a physical iPhone; the simulator cannot do it |
 
 `docs/TESTING.md` records exactly what can and cannot be tested on an emulator or
 simulator — worth reading before debugging anything.

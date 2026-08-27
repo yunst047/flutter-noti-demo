@@ -26,6 +26,20 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Without this the app can create a Live Activity, get back an id, and
+	     show nothing at all. ActivityKit reports no error. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<!-- Lets ActivityKit accept updates more often than the default budget,
+	     which a 4-step delivery run would otherwise start dropping. -->
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<!-- Required for silent push (content-available) to wake the app. -->
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

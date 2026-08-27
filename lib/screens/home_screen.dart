@@ -34,9 +34,17 @@ class HomeScreen extends StatelessWidget {
       _Section(
         route: '/live',
         icon: Icons.local_shipping_outlined,
-        title: 'Live Updates / Live Activity',
-        subtitle: 'Android ProgressStyle, iOS Dynamic Island',
+        title: 'Live Updates (Android)',
+        subtitle: 'Promoted ongoing notification via ProgressStyle',
         phase: 'Phase 4',
+        ready: true,
+      ),
+      _Section(
+        route: '/activity',
+        icon: Icons.blur_circular_outlined,
+        title: 'Live Activity (iOS)',
+        subtitle: 'ActivityKit on the Lock Screen and Dynamic Island',
+        phase: 'Phase 5',
         ready: true,
       ),
       _Section(

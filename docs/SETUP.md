@@ -159,15 +159,26 @@ charge** — unlike an ALB, nothing accrues while idle.
 
 ---
 
-## D. Apple  ⏸ deferred — needs the Mac
+## D. Apple  ◐ partly done — the console half is still outstanding
 
-Unblocks: anything iOS. Nothing here can be done from Windows, and none of it blocks
-Android work.
+Unblocks: anything iOS.
+
+> **The Mac is here now.** Everything that lives in the repo — the widget extension
+> target, the entitlements, the Info.plist keys, the `AppDelegate` wiring — is committed
+> and builds, and the Live Activity is verified on the simulator. What is left is the
+> part that can only be done by hand in Apple's and Firebase's consoles: D.1 and D.2.
+>
+> Until those are done, **iOS push does not work at all** — the app logs
+> `[core/not-initialized]` at startup and carries on. Local notifications and the Live
+> Activity are unaffected, because neither goes anywhere near Firebase.
 
 ### D.1 Apple Developer portal
 
 - [ ] **Identifiers → App ID** for `com.f0h.flt-noti-demo` → enable **Push Notifications**
       → Save. The Widget Extension does **not** need this ticked.
+- [ ] **Identifiers → App Groups** → register `group.com.f0h.flt-noti-demo`, then tick it
+      on **both** App IDs (`…flt-noti-demo` and `…flt-noti-demo.DeliveryWidget`).
+      Only needed for a physical device — the simulator does not check entitlements.
 - [ ] **Keys → +** → name it → enable **Apple Push Notifications service (APNs)** →
       Register
 - [ ] **Download the `.p8`** — available exactly once. Miss it and you must create a new
@@ -178,33 +189,83 @@ Android work.
 Use the Auth Key (`.p8`), not the older certificate flow: one key covers every app in the
 team and never expires.
 
+**The `.p8` goes to Firebase and nowhere else.** Not into this repo, not into the backend
+repo, not into Secrets Manager. Firebase is what talks to APNs; the backend only ever
+talks to FCM. See the chain in D.4.
+
 ### D.2 Firebase — iOS
 
-- [ ] Add an iOS app to the same Firebase project, bundle ID `com.f0h.flt-noti-demo`
-- [ ] `GoogleService-Info.plist` → **drag into Xcode and tick target membership = Runner**.
-      Copying the file into the folder is not enough; it must be in the target.
+- [ ] Add an iOS app to the same Firebase project, bundle ID `com.f0h.flt-noti-demo`.
+      **A separate registration from the Android one** — the two platforms use different
+      IDs, and pointing both at one app gives `SENDER_ID_MISMATCH` on send.
+- [ ] Download `GoogleService-Info.plist` → put it at `ios/Runner/GoogleService-Info.plist`
+      → then:
+      ```bash
+      ruby tool/link_google_services.rb
+      ```
+      The usual instruction is *drag it into Xcode and tick target membership = Runner*.
+      **The tick is the part that matters and the part people miss**: the app calls
+      `Firebase.initializeApp()` with no options, so on iOS it reads this file out of the
+      app *bundle*. On disk but not in the target means it is never copied, and the app
+      logs `[core/not-initialized]` — which reads like a credentials problem and is not.
+      The script does the same edit and refuses a plist whose `BUNDLE_ID` is wrong.
+
+      **Do not commit the `project.pbxproj` change it makes.** The plist is gitignored,
+      so a checkout that references it without containing it fails the build outright —
+      `Build input file cannot be found`. The committed project deliberately does not
+      reference the plist; every clone runs this script once after supplying its own.
 - [ ] **Project settings → Cloud Messaging → Apple app configuration → upload the APNs
       Auth Key** with Key ID + Team ID
 
 > This is what lets FCM reach iOS. Firebase holds the `.p8` and talks to APNs for you,
 > which means **the AWS backend never needs the `.p8` at all**.
 
-### D.3 Xcode
+**Prove the file is actually in the bundle** — the only check that settles it:
 
-- [ ] Runner target → Signing & Capabilities → add **Push Notifications**
-- [ ] Add **Background Modes** → tick **Remote notifications** (required for silent push)
-      and **Background fetch**
-- [ ] `Info.plist` → `NSSupportsLiveActivities = YES`
-- [ ] Widget Extension bundle ID must be a **child** of the main bundle ID —
-      `com.f0h.flt-noti-demo.DeliveryWidget`. Anything else and Live Activities silently
-      will not work.
-- [ ] App Group shared by both the Runner and widget targets
+```bash
+flutter build ios --simulator --debug
+ls build/ios/iphonesimulator/Runner.app/GoogleService-Info.plist
+```
+
+Then run the app and watch for the line that replaces `[push] init failed`:
+
+```
+[push] token acquired - …<last 12 chars>
+```
+
+A `null` token on iOS means APNs never issued one — check D.1 and D.3, not Firebase.
+
+### D.3 Xcode  ✅ done — nothing to click
+
+These are normally done through Xcode's Signing & Capabilities tab, which only writes
+files. Those files are in the repo, so there is nothing to do here:
+
+- [x] **Push Notifications** — `aps-environment` in `ios/Runner/Runner.entitlements`
+- [x] **Background Modes** — `remote-notification` and `fetch` in `UIBackgroundModes`
+      (`ios/Runner/Info.plist`)
+- [x] `NSSupportsLiveActivities = YES` in the Runner **and** widget Info.plists, plus
+      `NSSupportsLiveActivitiesFrequentUpdates` so a 4-step run is not throttled
+- [x] Widget Extension `DeliveryWidget`, bundle ID **`com.f0h.flt-noti-demo.DeliveryWidget`**
+      — a child of the app's ID, which is what ActivityKit requires. Anything else and
+      the activity is created, reports itself active, and never appears.
+- [x] App Group **`group.com.f0h.flt-noti-demo`** on both targets
+- [x] The explicit `setAPNSToken` call below, in `ios/Runner/AppDelegate.swift`
+
+The extension target was added by script (`xcodeproj` gem) rather than through
+**File → New → Target**, because that wizard is GUI-only. Re-running the script replaces
+the target instead of adding a second one; see `docs/DECISIONS.md`.
+
+**Still needed for a physical device** (the simulator does not check any of it):
+
+- [ ] Set a **Development Team** on the Runner and DeliveryWidget targets
+- [ ] Register the App Group and both App IDs in the Apple Developer portal, so
+      automatic signing can issue profiles that carry the entitlements above
 
 **The sandbox/production trap.** Debug builds get an APNs **sandbox** token; TestFlight
 and App Store builds get a **production** one. Different tokens, different endpoints.
 Sending to the wrong side fails as a quiet 400. FCM reads the `aps-environment`
-entitlement to decide, but it does not always detect correctly — set it explicitly in
-`AppDelegate`:
+entitlement to decide, but it does not always detect correctly — so it is set explicitly
+in `ios/Runner/AppDelegate.swift`, already committed:
 
 ```swift
 #if DEBUG
@@ -213,6 +274,58 @@ Messaging.messaging().setAPNSToken(deviceToken, type: .sandbox)
 Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
 #endif
 ```
+
+### D.4 How the APNs half actually fits together
+
+Worth having in your head before debugging any of it. **The app never speaks to APNs and
+the backend never speaks to APNs.** There is exactly one hop each:
+
+```
+ backend ──HTTP v1──► FCM ──APNs──► device
+   holds:              holds:
+   service-account     your .p8
+   JSON                (uploaded in D.2)
+```
+
+So each artifact has exactly one job, and putting it anywhere else is the mistake:
+
+| Artifact | Lives where | Proves what |
+|---|---|---|
+| `.p8` + Key ID + Team ID | **uploaded to Firebase only** | that FCM may talk to APNs on your behalf |
+| `aps-environment` entitlement | the app binary | which APNs environment the device token belongs to |
+| `GoogleService-Info.plist` | the app **bundle** | which Firebase project this install belongs to |
+| Service-account JSON | Secrets Manager, backend only | that the backend may call FCM |
+
+**Test the links separately, in this order.** Each one fails differently, and testing them
+together is how an afternoon disappears:
+
+1. **Device → APNs.** Run the app, watch for `[push] token acquired`. `null`, or no line
+   at all, means APNs never issued a token: D.1 or the entitlement, not Firebase.
+   *Only a real device or an Apple Silicon simulator on macOS 13+ can get one.*
+2. **Backend → FCM (auth).** Send to a made-up token. The correct answer is FCM rejecting
+   the *token* (`INVALID_ARGUMENT`), which proves auth already worked. `403 SERVICE_DISABLED`
+   or `cloudmessaging.messages.create denied` is section B, not this section.
+   ```bash
+   curl -XPOST -H "X-Demo-Key: $KEY" $API_BASE_URL/api/push/notification \
+     -d '{"deviceId":"probe","title":"t","body":"b"}'
+   ```
+3. **FCM → APNs → device.** Only now send to the real token. If steps 1 and 2 passed and
+   this one silently delivers nothing, it is almost always the APNs key never having been
+   uploaded in D.2, or a sandbox/production mismatch — see the trap above.
+
+Two failures that look like credentials and are not:
+
+- **`SENDER_ID_MISMATCH`** — the plist belongs to a different Firebase app than the token.
+  On this project that usually means the iOS app was not registered separately from the
+  Android one. `tool/link_google_services.rb` refuses a plist whose `BUNDLE_ID` is wrong,
+  which catches the common half of this.
+- **Push works in debug, stops in TestFlight** — the sandbox/production trap, every time.
+
+**Live Activities need nothing more from Apple.** The same APNs key and the same
+`aps-environment` cover them. What is missing for those is on the *backend* side: FCM's
+Go Admin SDK has no `live_activity_token` field, so the Live Activity endpoints have to
+be raw HTTP v1 — plan v2 §5.1. The app already collects and re-sends both tokens
+(`docs/screenshots/README.md` shows the screen); nothing receives them yet.
 
 ---
 

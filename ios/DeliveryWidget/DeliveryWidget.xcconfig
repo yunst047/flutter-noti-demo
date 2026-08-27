@@ -1,0 +1,11 @@
+// An app extension must carry a version, and it has to match the app that
+// embeds it. Without this the .appex builds cleanly and then fails to install
+// with "Invalid placeholder attributes" — the versions come out empty, because
+// FLUTTER_BUILD_NAME/NUMBER are only defined for the Runner target.
+//
+// Optional include: Generated.xcconfig is written by the Flutter tool and is
+// absent in a clean checkout, where the defaults below apply instead.
+#include? "../Flutter/Generated.xcconfig"
+
+MARKETING_VERSION=$(FLUTTER_BUILD_NAME:default=1.0.0)
+CURRENT_PROJECT_VERSION=$(FLUTTER_BUILD_NUMBER:default=1)
