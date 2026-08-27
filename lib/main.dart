@@ -3,10 +3,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/home_screen.dart';
+import 'screens/live_update_screen.dart';
 import 'screens/local_noti_screen.dart';
 import 'screens/log_screen.dart';
 import 'screens/permission_screen.dart';
 import 'screens/push_screen.dart';
+import 'services/live_update_service.dart';
 import 'services/local_noti_service.dart';
 import 'services/noti_log.dart';
 import 'services/permission_service.dart';
@@ -16,6 +18,7 @@ final plugin = FlutterLocalNotificationsPlugin();
 final localNoti = LocalNotiService(plugin);
 final permissions = PermissionService(plugin);
 final push = PushService(localNoti);
+final liveUpdate = LiveUpdateService();
 
 final _router = GoRouter(
   routes: [
@@ -23,6 +26,7 @@ final _router = GoRouter(
     GoRoute(path: '/permissions', builder: (_, _) => const PermissionScreen()),
     GoRoute(path: '/local', builder: (_, _) => const LocalNotiScreen()),
     GoRoute(path: '/push', builder: (_, _) => const PushScreen()),
+    GoRoute(path: '/live', builder: (_, _) => const LiveUpdateScreen()),
     GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
   ],
 );
@@ -50,7 +54,7 @@ Future<void> main() async {
   // attacker-influenced input in principle, and go_router throws on a route it
   // does not recognise.
   push.onDeepLink = (route) {
-    const known = {'/', '/permissions', '/local', '/push', '/log'};
+    const known = {'/', '/permissions', '/local', '/push', '/live', '/log'};
     if (!known.contains(route)) {
       NotiLog.instance.add('push', 'deep link ignored', 'unknown route $route');
       return;

@@ -36,8 +36,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.local_shipping_outlined,
         title: 'Live Updates / Live Activity',
         subtitle: 'Android ProgressStyle, iOS Dynamic Island',
-        phase: 'Phase 4–5',
-        ready: false,
+        phase: 'Phase 4',
+        ready: true,
       ),
       _Section(
         route: '/log',
