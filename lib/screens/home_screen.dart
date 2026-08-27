@@ -28,8 +28,8 @@ class HomeScreen extends StatelessWidget {
         icon: Icons.cloud_outlined,
         title: 'Push (FCM)',
         subtitle: 'Notification vs data-only vs silent, topics',
-        phase: 'Phase 2–3',
-        ready: false,
+        phase: 'Phase 2',
+        ready: true,
       ),
       _Section(
         route: '/live',

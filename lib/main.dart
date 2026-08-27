@@ -6,19 +6,23 @@ import 'screens/home_screen.dart';
 import 'screens/local_noti_screen.dart';
 import 'screens/log_screen.dart';
 import 'screens/permission_screen.dart';
+import 'screens/push_screen.dart';
 import 'services/local_noti_service.dart';
 import 'services/noti_log.dart';
 import 'services/permission_service.dart';
+import 'services/push_service.dart';
 
 final plugin = FlutterLocalNotificationsPlugin();
 final localNoti = LocalNotiService(plugin);
 final permissions = PermissionService(plugin);
+final push = PushService(localNoti);
 
 final _router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
     GoRoute(path: '/permissions', builder: (_, _) => const PermissionScreen()),
     GoRoute(path: '/local', builder: (_, _) => const LocalNotiScreen()),
+    GoRoute(path: '/push', builder: (_, _) => const PushScreen()),
     GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
   ],
 );
@@ -35,6 +39,16 @@ Future<void> main() async {
   if (launch?.didNotificationLaunchApp ?? false) {
     final payload = launch!.notificationResponse?.payload;
     NotiLog.instance.add('tap', 'cold start', payload ?? '(no payload)');
+  }
+
+  // Push init is allowed to fail without taking the app down: Phases 0 and 1
+  // work with no Firebase at all, and a missing google-services.json should
+  // leave the local-notification demos usable rather than showing a black
+  // screen.
+  try {
+    await push.init();
+  } catch (e) {
+    NotiLog.instance.add('push', 'init failed', '$e');
   }
 
   runApp(const NotiDemoApp());

@@ -507,6 +507,25 @@ class LocalNotiService {
     NotiLog.instance.add('local', 'fullScreenIntent', 'id=12');
   }
 
+  // --------------------------------------------------- push-driven display
+
+  /// Posts a notification on behalf of a data-only push.
+  ///
+  /// Data-only messages display nothing themselves, so the app has to draw
+  /// them. Deliberately on the high-importance channel so the result is
+  /// visually indistinguishable from a notification message — the difference is
+  /// entirely in who decided to show it.
+  Future<void> showFromPush({required String title, required String body}) async {
+    await _plugin.show(
+      id: 20,
+      title: title,
+      body: body,
+      notificationDetails: _details(channelHigh),
+      payload: 'push:data',
+    );
+    NotiLog.instance.add('push', 'displayed local', 'id=20');
+  }
+
   // ------------------------------------------ 13. sound & vibration
 
   /// Fires on one of the sound/vibration channels.

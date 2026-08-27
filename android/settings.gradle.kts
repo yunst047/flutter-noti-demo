@@ -21,6 +21,9 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Processes android/app/google-services.json into the resources Firebase
+    // reads at init. Without it the file is inert and FCM never gets a token.
+    id("com.google.gms.google-services") version "4.4.3" apply false
 }
 
 include(":app")
