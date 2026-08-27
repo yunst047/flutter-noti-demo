@@ -1,4 +1,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Runtime prompt on Android 13+. Below 13 it is granted at install. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Exact scheduling. SCHEDULE_EXACT_ALARM is user-revocable in settings on
+         Android 12+; USE_EXACT_ALARM (Android 13+) is auto-granted but is only
+         permitted for genuine alarm/calendar apps on the Play Store. Both are
+         declared here so the demo can show the difference. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+
+    <!-- Re-register scheduled notifications after a reboot; without this every
+         pending zonedSchedule is silently dropped when the device restarts. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- Incoming-call style notifications. Not auto-granted on Android 14+
+         unless the app's core function is calling or alarms; when denied the
+         notification degrades to a normal heads-up. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
+    <!-- Phase 4: promoted ongoing notifications (Live Updates), API 36+.
+         Declared now so the manifest does not change mid-phase. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
+
     <application
         android:label="notidemo"
         android:name="${applicationName}"
@@ -30,6 +56,34 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- flutter_local_notifications does NOT declare these in its own
+             manifest, so they have to be registered here. Without them
+             scheduled notifications never fire and action-button taps are
+             dropped — both fail silently, with nothing in logcat. -->
+
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+
+        <!-- Handles action-button and inline-reply taps, including while the
+             app process is dead. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false"/>
+
+        <!-- Restores pending scheduled notifications after a reboot or an app
+             update; without it they are lost. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

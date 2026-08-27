@@ -1,122 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+import 'screens/home_screen.dart';
+import 'screens/local_noti_screen.dart';
+import 'screens/log_screen.dart';
+import 'screens/permission_screen.dart';
+import 'services/local_noti_service.dart';
+import 'services/noti_log.dart';
+import 'services/permission_service.dart';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+final plugin = FlutterLocalNotificationsPlugin();
+final localNoti = LocalNotiService(plugin);
+final permissions = PermissionService(plugin);
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
+final _router = GoRouter(
+  routes: [
+    GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
+    GoRoute(path: '/permissions', builder: (_, _) => const PermissionScreen()),
+    GoRoute(path: '/local', builder: (_, _) => const LocalNotiScreen()),
+    GoRoute(path: '/log', builder: (_, _) => const LogScreen()),
+  ],
+);
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+  await localNoti.init(_onNotificationTap);
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  // A tap that launched the app from a cold start is not delivered to the
+  // callback above — it has to be pulled out explicitly, or the deep link is
+  // lost exactly in the case users notice most.
+  final launch = await plugin.getNotificationAppLaunchDetails();
+  if (launch?.didNotificationLaunchApp ?? false) {
+    final payload = launch!.notificationResponse?.payload;
+    NotiLog.instance.add('tap', 'cold start', payload ?? '(no payload)');
   }
 
+  runApp(const NotiDemoApp());
+}
+
+void _onNotificationTap(NotificationResponse response) {
+  final input = response.input;
+  NotiLog.instance.add(
+    'tap',
+    response.actionId ?? 'body',
+    [
+      'id=${response.id}',
+      if (response.payload != null) 'payload=${response.payload}',
+      // Inline reply text arrives here rather than as a separate callback.
+      if (input != null && input.isNotEmpty) 'reply="$input"',
+    ].join(' '),
+  );
+}
+
+class NotiDemoApp extends StatelessWidget {
+  const NotiDemoApp({super.key});
+
   @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp.router(
+    title: 'Notification Demo',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorSchemeSeed: const Color(0xFF3B6EF6),
+      brightness: Brightness.light,
+      useMaterial3: true,
+    ),
+    darkTheme: ThemeData(
+      colorSchemeSeed: const Color(0xFF3B6EF6),
+      brightness: Brightness.dark,
+      useMaterial3: true,
+    ),
+    routerConfig: _router,
+  );
 }

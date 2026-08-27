@@ -7,11 +7,27 @@ plugins {
 android {
     namespace = "com.yunst047.notidemo"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+
+    // Flutter defaults to NDK 28.2.13676358, which is not installed here. The
+    // Android Gradle Plugin then tries to fetch it through sdkmanager.bat,
+    // which crashes (0xC0000409) — that shim is deprecated and broken in this
+    // SDK release, so the download never succeeds and the build fails during
+    // configuration.
+    //
+    // Nothing in this project or its plugins ships native C/C++ code, so the
+    // exact NDK revision is irrelevant. Pointing at the installed one skips a
+    // ~2.5 GB download. Remove this line if a plugin with native code is ever
+    // added, and install the version Flutter asks for instead.
+    ndkVersion = "30.0.16138531"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        // Required by flutter_local_notifications, which uses java.time APIs
+        // that do not exist below API 26. Without this the build fails with
+        // "requires core library desugaring to be enabled for :app".
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -46,4 +62,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Backing library for isCoreLibraryDesugaringEnabled above.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
