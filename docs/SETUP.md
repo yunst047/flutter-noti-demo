@@ -60,8 +60,43 @@ key carries broad Firebase Admin rights. Create a narrowly-scoped one instead:
       and nothing else that matters
 - [ ] Open the account → **Keys → Add key → Create new key → JSON** → download
 
-**Collect:** the JSON file. Keep it **outside both repos**. It goes into AWS Secrets
-Manager; a local copy is only for `FCM_CREDENTIALS_FILE` during development.
+**Collect:** the JSON file. Keep it **outside both repos** — `C:\Users\<you>\.secrets\`
+is what this project uses. It goes into AWS Secrets Manager; a local copy is only for
+`FCM_CREDENTIALS_FILE` during development.
+
+> **Never leave a downloaded key inside a repo, even briefly.** GCP names them
+> `<project-id>-<hash>.json`, which matches no obvious "service-account" ignore pattern —
+> a `git add -A` will happily commit one. The backend repo now denies every `.json` at
+> its root by default rather than relying on name matching.
+
+### Two things that will fail even with a valid key
+
+Both produce 403s that look like credential problems but are not:
+
+- [ ] **Enable the FCM API on the project.** A new project has it off, and you get
+      `SERVICE_DISABLED`:
+      ```bash
+      gcloud services enable fcm.googleapis.com --project=<project-id>
+      ```
+- [ ] **Grant the right role.** Creating the service account through the Firebase console
+      may leave it with `roles/firebasenotifications.admin` — the *legacy* Notifications
+      role, which does **not** permit `cloudmessaging.messages.create` on the v1 API. You
+      need:
+      ```bash
+      gcloud projects add-iam-policy-binding <project-id> \
+        --member="serviceAccount:<sa>@<project-id>.iam.gserviceaccount.com" \
+        --role="roles/firebasecloudmessaging.admin"
+      ```
+      Allow ~30–60s for IAM to propagate; until it does you keep getting
+      `Permission 'cloudmessaging.messages.create' denied`.
+
+**Verify the whole chain** without a real device — a made-up token should be rejected by
+FCM itself (`INVALID_ARGUMENT`), not by auth:
+
+```bash
+curl -XPOST -H "X-Demo-Key: $KEY" $API_BASE_URL/api/push/notification \
+  -d '{"deviceId":"probe","title":"t","body":"b"}'
+```
 
 ---
 
@@ -99,7 +134,7 @@ Unblocks: the deployed Function URL, so the app works away from a USB cable.
         --secret-id noti-demo/fcm-sa \
         --secret-string file://service-account.json
       ```
-- [ ] Note the `function_url` output → this becomes `API_BASE_URL` in `env.local.json`
+- [ ] Note the `api_base_url` output → this becomes `API_BASE_URL` in `env.local.json`
 
 **For CI** (only needed once you want push-to-deploy):
 
@@ -175,7 +210,7 @@ Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
 | Firebase Project ID | Firebase settings | backend (`FIREBASE_PROJECT_ID`) |
 | Service account JSON | GCP IAM | backend, via Secrets Manager |
 | `google-services.json` | Firebase Android app | `android/app/` |
-| Function URL | `terraform output` | app `API_BASE_URL` |
+| Function URL | `terraform output api_base_url` | app `API_BASE_URL` |
 | API key | you generate it | app `API_KEY` + backend `api_key` |
 | Team ID, APNs Key ID, `.p8` | Apple portal | uploaded to Firebase — **not** the backend |
 | `GoogleService-Info.plist` | Firebase iOS app | Xcode, Runner target |
