@@ -1,0 +1,72 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Widget Preview related
+.widget_preview/
+
+# ---------------------------------------------------------------------------
+# Secrets — THIS REPO IS PUBLIC. Nothing below may ever be committed.
+# See plan v2 §8. Templates (*.example) are committed instead.
+# ---------------------------------------------------------------------------
+
+# Firebase / Google config (contain project IDs and API keys)
+**/GoogleService-Info.plist
+**/google-services.json
+lib/firebase_options.dart
+
+# APNs auth key — downloadable exactly once from Apple; never in git
+**/*.p8
+
+# Android signing
+android/key.properties
+**/*.jks
+**/*.keystore
+
+# Backend URL + shared secret, injected via --dart-define-from-file
+env.local.json
+.env
+.env.*
+!.env.example
