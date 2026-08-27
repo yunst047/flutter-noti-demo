@@ -47,13 +47,9 @@ class DeliveryMessagingService : FlutterFirebaseMessagingService() {
 
         when {
             index <= 1 -> plugin.startDelivery(title, eta)
-            index >= total -> {
-                // Show the final stage briefly, then clear it. Leaving an
-                // ongoing notification behind after the delivery has finished
-                // is the thing users complain about.
-                plugin.updateDelivery(title, index - 1, eta)
-                plugin.endDeliveryDelayed()
-            }
+            // Final stage: shown briefly, dismissible, and expired by the
+            // system rather than by this soon-to-die service.
+            index >= total -> plugin.endDeliveryFinal(title, index - 1, eta)
             else -> plugin.updateDelivery(title, index - 1, eta)
         }
     }

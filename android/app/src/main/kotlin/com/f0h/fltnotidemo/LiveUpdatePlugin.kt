@@ -114,7 +114,13 @@ class LiveUpdatePlugin(private val context: Context) {
         nm.createNotificationChannel(channel)
     }
 
-    private fun show(title: String, step: Int, eta: String) {
+    private fun show(
+        title: String,
+        step: Int,
+        eta: String,
+        finished: Boolean = false,
+        timeoutAfterMs: Long = 0,
+    ) {
         val nm = context.getSystemService(NotificationManager::class.java)
         ensureChannel(nm)
 
@@ -123,16 +129,23 @@ class LiveUpdatePlugin(private val context: Context) {
             // A content title is mandatory for promotion.
             .setContentTitle(title)
             .setContentText(STEPS.getOrElse(step) { "" })
-            // Ongoing is mandatory: a Live Update represents something still
-            // happening, and the system refuses to promote a dismissible one.
-            .setOngoing(true)
+            // Ongoing is mandatory while in progress: a Live Update represents
+            // something still happening, and the system refuses to promote a
+            // dismissible one. Once finished it must be dropped, or the user is
+            // left with a notification they cannot swipe away.
+            .setOngoing(!finished)
             // Deliberately NOT setColorized(true) and NOT a group summary, and
             // no custom RemoteViews — each of those disqualifies promotion on
             // its own, silently.
             .setOnlyAlertOnce(true)
 
+        if (finished) {
+            builder.setAutoCancel(true)
+            if (timeoutAfterMs > 0) builder.setTimeoutAfter(timeoutAfterMs)
+        }
+
         if (Build.VERSION.SDK_INT >= 36) {
-            applyProgressStyle(builder, step, eta)
+            applyProgressStyle(builder, step, eta, promote = !finished)
         }
 
         nm.notify(NOTIFICATION_ID, builder.build())
@@ -143,7 +156,12 @@ class LiveUpdatePlugin(private val context: Context) {
      * each boundary, which is what gives the bar its stepped appearance rather
      * than a plain percentage.
      */
-    private fun applyProgressStyle(builder: Notification.Builder, step: Int, eta: String) {
+    private fun applyProgressStyle(
+        builder: Notification.Builder,
+        step: Int,
+        eta: String,
+        promote: Boolean = true,
+    ) {
         runCatching {
             val styleCls = Class.forName("android.app.Notification\$ProgressStyle")
             val segCls = Class.forName("android.app.Notification\$ProgressStyle\$Segment")
@@ -175,10 +193,11 @@ class LiveUpdatePlugin(private val context: Context) {
             builder.style = style as Notification.Style
 
             // Asks the system to promote this to a Live Update. Honoured only
-            // on 36.1+; on plain 36 it is accepted and ignored.
+            // on 36.1+; on plain 36 it is accepted and ignored. Not requested
+            // for the final state — that is no longer in progress.
             Notification.Builder::class.java
                 .getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
-                .invoke(builder, true)
+                .invoke(builder, promote)
 
             // The short text shown in the status-bar chip once promoted.
             if (eta.isNotEmpty()) {
@@ -207,9 +226,20 @@ class LiveUpdatePlugin(private val context: Context) {
 
     fun updateDelivery(title: String, step: Int, eta: String) = show(title, step, eta)
 
-    /** Leaves the completed stage visible briefly, then clears it. */
-    fun endDeliveryDelayed(afterMs: Long = 6000) {
-        android.os.Handler(android.os.Looper.getMainLooper())
-            .postDelayed({ end() }, afterMs)
+    /**
+     * Posts the final stage so it lingers briefly, then expires on its own.
+     *
+     * The obvious approach — Handler.postDelayed { end() } — does not survive:
+     * this runs inside a FirebaseMessagingService, which Android may tear down
+     * as soon as onMessageReceived returns, taking the pending callback with
+     * it. The notification then stays on screen forever, and because it is
+     * ongoing the user cannot even swipe it away.
+     *
+     * setTimeoutAfter hands expiry to the system instead, so it happens whether
+     * or not this process is still alive. Ongoing is also dropped here: the
+     * delivery is over, so it should no longer be promoted or undismissable.
+     */
+    fun endDeliveryFinal(title: String, step: Int, eta: String, lingerMs: Long = 8000) {
+        show(title, step, eta, finished = true, timeoutAfterMs = lingerMs)
     }
 }
