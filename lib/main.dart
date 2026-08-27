@@ -62,23 +62,6 @@ Future<void> main() async {
     _router.go(route);
   };
 
-  // Server-driven delivery steps advance the Live Update instead of posting a
-  // notification per step.
-  push.onDeliveryStep = (data) async {
-    final index = int.tryParse('${data['index'] ?? 1}') ?? 1;
-    final total = int.tryParse('${data['total'] ?? 4}') ?? 4;
-    if (index <= 1) {
-      await liveUpdate.start(title: 'Order ${data['orderId'] ?? ''}', eta: '${data['eta'] ?? ''}');
-    } else {
-      await liveUpdate.update(
-        step: index - 1,
-        title: 'Order ${data['orderId'] ?? ''}',
-        eta: '${data['eta'] ?? ''}',
-      );
-    }
-    if (index >= total) await liveUpdate.end();
-  };
-
   try {
     await push.init();
   } catch (e) {

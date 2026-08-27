@@ -68,4 +68,15 @@ flutter {
 dependencies {
     // Backing library for isCoreLibraryDesugaringEnabled above.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+
+    // DeliveryMessagingService subclasses the firebase_messaging plugin's
+    // service, so firebase-messaging must be on THIS module's compile
+    // classpath. It arrives transitively at runtime, but a transitive
+    // dependency is not visible to our own Kotlin at compile time.
+    //
+    // Pinned to the same BoM the plugin resolves
+    // (firebase_core/android/gradle.properties: FirebaseSDKVersion=34.18.0) so
+    // the app and the plugin cannot end up on different Firebase versions.
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
@@ -47,10 +46,7 @@ Future<void> onBackgroundMessage(RemoteMessage message) async {
       return;
 
     case 'delivery_step':
-      // Drives the Live Update rather than posting a notification. The
-      // MethodChannel is addressed directly because this isolate has no access
-      // to the LiveUpdateService instance main() created.
-      await _backgroundDeliveryStep(message.data);
+      // Handled natively in DeliveryMessagingService; nothing to draw here.
       return;
   }
 
@@ -147,24 +143,6 @@ Future<void> _backgroundSilentFetch(String path) async {
   }
 }
 
-/// Advances the Android Live Update from the background isolate.
-@pragma('vm:entry-point')
-Future<void> _backgroundDeliveryStep(Map<String, dynamic> data) async {
-  if (!Platform.isAndroid) return;
-  const channel = MethodChannel('noti_demo/live_update');
-  final index = int.tryParse('${data['index'] ?? '1'}') ?? 1;
-  try {
-    await channel.invokeMethod<void>(index <= 1 ? 'start' : 'update', {
-      'step': index - 1,
-      'title': 'Order ${data['orderId'] ?? ''}',
-      'eta': '${data['eta'] ?? ''}',
-    });
-    debugPrint('background delivery step $index applied');
-  } catch (e) {
-    debugPrint('background delivery step failed: $e');
-  }
-}
-
 class PushService {
   PushService(this._localNoti);
 
@@ -242,9 +220,6 @@ class PushService {
   /// not need to know about the router.
   void Function(String route)? onDeepLink;
 
-  /// Server-driven delivery step. Wired in main() to the Live Update service,
-  /// so this class stays unaware of the platform channel.
-  Future<void> Function(Map<String, dynamic> data)? onDeliveryStep;
 
   void _route(RemoteMessage m) {
     final route = routeFor(m);
@@ -276,7 +251,14 @@ class PushService {
       // falling through to the generic branch rendered jsonEncode(data) — the
       // raw payload — on screen once per step.
       case 'delivery_step':
-        await onDeliveryStep?.call(m.data);
+        // Handled natively by DeliveryMessagingService before Dart sees it, so
+        // that it behaves the same whether the app is foregrounded,
+        // backgrounded or killed. Logged here only.
+        NotiLog.instance.add(
+          'live',
+          'delivery step ${m.data['index']}/${m.data['total']}',
+          '${m.data['title']} · ${m.data['eta']}',
+        );
         return;
     }
 

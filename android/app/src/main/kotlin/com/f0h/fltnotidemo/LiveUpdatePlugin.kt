@@ -197,4 +197,19 @@ class LiveUpdatePlugin(private val context: Context) {
     private fun end() {
         context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }
+
+    // --- entry points for DeliveryMessagingService -------------------------
+    //
+    // Server-driven steps arrive natively rather than through the
+    // MethodChannel, because the background isolate cannot reach it.
+
+    fun startDelivery(title: String, eta: String) = show(title, 0, eta)
+
+    fun updateDelivery(title: String, step: Int, eta: String) = show(title, step, eta)
+
+    /** Leaves the completed stage visible briefly, then clears it. */
+    fun endDeliveryDelayed(afterMs: Long = 6000) {
+        android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed({ end() }, afterMs)
+    }
 }
