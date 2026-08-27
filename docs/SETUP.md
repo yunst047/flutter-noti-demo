@@ -100,12 +100,13 @@ curl -XPOST -H "X-Demo-Key: $KEY" $API_BASE_URL/api/push/notification \
 
 ---
 
-## C. AWS  ✅ mostly done
+## C. AWS  ✅ done
 
-Unblocks: the deployed Function URL, so the app works away from a USB cable.
+Unblocks: the deployed HTTPS endpoint, so the app works away from a USB cable.
 
-> **Already applied** — 10 resources are live and both Lambdas have the real code.
-> One manual step remains, at the bottom of this section.
+> **Complete.** 14 resources are live, both Lambdas run the real code, and the endpoint
+> is verified end to end — `/healthz` returns `fcmConfigured: true` and a push with an
+> invalid token is rejected by FCM itself rather than failing auth.
 >
 > On this machine, invoke Terraform by its full path:
 > `C:\ProgramData\chocolatey\lib\terraform\tools\terraform.exe`. The Application Control
@@ -113,28 +114,40 @@ Unblocks: the deployed Function URL, so the app works away from a USB cable.
 
 - [x] `cd infra && cp terraform.tfvars.example terraform.tfvars`, fill in
       `firebase_project_id` and an `api_key` (`openssl rand -hex 24`)
-- [x] `terraform init && terraform plan` — read-only, confirms IAM and table shape
-- [x] `terraform apply`
-
-- [ ] **Turn off Block Public Access** — the one step left, and the reason the Function
-      URL currently returns `403 AccessDeniedException`:
-      **Lambda console → Account settings → Block public access**
-
-      Accounts created since ~2024 have this on by default. It rejects `AuthType NONE`
-      function URLs before they reach the function, no matter what the resource policy
-      says, and it cannot be changed from Terraform or the AWS CLI. Everything else is
-      already correct — `aws lambda invoke` against the function returns 200.
-
-- [ ] Set `firebase_project_id` in `terraform.tfvars` once you have it from section A,
-      then `terraform apply` again to push it into the Lambda environment.
-- [ ] Populate the secret **out of band** — Terraform creates it empty on purpose, so the
+- [x] `terraform init && terraform plan && terraform apply`
+- [x] Populate the secret **out of band** — Terraform creates it empty on purpose, so the
       private key never enters Terraform state:
       ```bash
       aws secretsmanager put-secret-value \
         --secret-id noti-demo/fcm-sa \
-        --secret-string file://service-account.json
+        --secret-string file://C:/Users/<you>/.secrets/noti-demo-fcm-sa.json
       ```
-- [ ] Note the `api_base_url` output → this becomes `API_BASE_URL` in `env.local.json`
+- [x] `terraform output api_base_url` → becomes `API_BASE_URL` in `env.local.json`
+
+### Why this is API Gateway and not a Lambda Function URL
+
+The design originally used a Function URL — simpler and free. It cannot work on this
+account. Accounts created since roughly 2024 enable account-level **Block Public Access
+for Lambda** by default, which rejects `AuthType NONE` function URLs with
+`403 AccessDeniedException` *before the request reaches the function*, regardless of the
+resource policy. Terraform reports success the whole time, because every resource really
+is created correctly.
+
+It cannot be disabled from Terraform or the AWS CLI (aws-cli 2.36 has no such operation),
+and the `PutPublicAccessBlockConfig` REST API would not route when called directly with a
+hand-signed request — AWS appears to have partially withdrawn it.
+
+API Gateway HTTP API is not subject to the restriction, still provides a valid
+AWS-managed certificate, and costs ~$1 per million requests with **no fixed monthly
+charge** — unlike an ALB, nothing accrues while idle.
+
+**For CI** (only needed once you want push-to-deploy):
+
+- [ ] Create an IAM user `noti-demo-ci` with a single permission,
+      `lambda:UpdateFunctionCode`, scoped to the two function ARNs. **Do not use
+      `demo_admin`'s keys in CI.**
+- [ ] Add to GitLab → Settings → CI/CD → Variables, all **masked + protected**:
+      `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION=ap-southeast-1`
 
 **For CI** (only needed once you want push-to-deploy):
 
