@@ -15,7 +15,7 @@ single Go backend so you can see exactly how each payload differs.
 | Push (FCM) | notification vs data-only vs silent, topics, all three app states (foreground / background / terminated) |
 | Advanced push | rich media, deep links, silent-push-then-fetch |
 | Android Live Updates | `Notification.ProgressStyle` promoted ongoing notification (API 36.1+) |
-| iOS Live Activity | Lock screen + Dynamic Island, updated over push |
+| iOS Live Activity | Lock Screen + Dynamic Island, driven locally — push-driven updates are a documented, deliberate gap ([why](docs/LIVE-ACTIVITY-API.md)) |
 
 The most useful artifact here is [`docs/PAYLOADS.md`](docs/PAYLOADS.md) — the real
 payload for every notification type, side by side.

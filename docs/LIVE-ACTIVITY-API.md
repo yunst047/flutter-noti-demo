@@ -3,12 +3,36 @@
 What the server has to implement to drive an iOS Live Activity, and one thing that has to
 change in the app first.
 
-Status as of 2026-08-28: the app sends both tokens and the backend answers **404**. None
-of this exists yet.
+---
+
+## Status: not built, deliberately
+
+**Decided 2026-08-28: halted, not abandoned.** This document is the deliverable rather
+than a to-do list.
+
+Three reasons, in order of weight:
+
+1. **The endpoints alone would do nothing.** See the next section — with the widget as it
+   stands, a push-driven update cannot change the card. The real prerequisite is replacing
+   `live_activities` with a hand-written ActivityKit bridge, and that is the larger half of
+   the work.
+2. **It cannot be verified.** Live Activity push does not work on the simulator, and there
+   is no physical iPhone. This project's rule is not to call iOS verified without evidence
+   (`docs/screenshots/`), so building it now would produce code nobody could prove either
+   way — the exact thing the rest of these docs avoid.
+3. **The local-driven Live Activity already works** and is screenshotted. Push-driven adds
+   one capability: the *server* moving the card. Everything else is demonstrated.
+
+What is already in place, should this be picked up: the app sends both tokens
+(`live_activity_service.dart`), and the Go backend already has
+`fcm.Message.LiveActivityToken` and `store.KindLiveActivity`. Only the four routes below
+are missing, which is why the app logs `404`.
+
+The backend is **still deployed** — do not re-provision it.
 
 ---
 
-## Read this before writing any of it
+## Why the naive version fails
 
 **With the widget as it stands today, a push-driven update cannot change anything on
 screen.** Not "unreliably" — it cannot. The endpoints would return 200, FCM would accept

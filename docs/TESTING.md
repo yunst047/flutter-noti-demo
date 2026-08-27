@@ -102,8 +102,10 @@ Firebase and APNs are wired (`docs/SETUP.md` §D). The simulator got a real FCM 
 possible because this is an Apple Silicon Mac — registered it with the backend, and every
 endpoint below was fired at it once.
 
-**The backend has since been torn down (`terraform destroy`), so this table is the
-record.** `/healthz` answered `{"fcmConfigured":true,"ok":true,"store":"dynamodb:noti-demo-tokens"}`
+**The backend is still deployed** — `noti-demo-api`, `noti-demo-worker` and
+`noti-demo-tokens` are live and `/healthz` returns 200. (An earlier revision of this file
+said it had been destroyed; that was wrong. Check before re-provisioning anything.)
+`/healthz` answers `{"fcmConfigured":true,"ok":true,"store":"dynamodb:noti-demo-tokens"}`
 and `POST /api/tokens` returned 200 on launch.
 
 | Endpoint | FCM | Reached the app? |
