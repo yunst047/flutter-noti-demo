@@ -114,6 +114,54 @@ class _PushScreenState extends State<PushScreen> {
           ),
 
           const SizedBox(height: 8),
+          Text('  Phase 3 — advanced', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+
+          _PushDemo(
+            title: 'Silent push → fetch → display',
+            subtitle: 'The push carries no content at all, only a signal. The '
+                'app calls /api/inbox and displays what comes back. Content '
+                'never travels through FCM, so it cannot go stale and is not '
+                'capped at 4KB. This is what production apps actually do.',
+            onTap: () async {
+              await push.requestPush('/api/push/silent');
+              setState(() {});
+            },
+          ),
+          _PushDemo(
+            title: 'Rich push (image)',
+            subtitle: 'Android renders the image via BigPictureStyle for free. '
+                'iOS needs a Notification Service Extension — the payload '
+                'already sets mutable-content, so only the Xcode side is left.',
+            onTap: () async {
+              await push.requestPush('/api/push/rich');
+              setState(() {});
+            },
+          ),
+          _PushDemo(
+            title: 'Action buttons',
+            subtitle: 'Sent as data-only, because the OS draws notification '
+                'messages and ignores any buttons the app would attach. Accept '
+                'and Decline land in the Event log.',
+            onTap: () async {
+              await push.requestPush('/api/push/actions');
+              setState(() {});
+            },
+          ),
+          _PushDemo(
+            title: 'Deep link → Event log',
+            subtitle: 'Tap the notification and the app opens the log screen. '
+                'The route rides in data, not notification, so it survives in '
+                'every app state — including a cold start.',
+            onTap: () async {
+              await push.requestPush('/api/push/deeplink', extra: {
+                'data': {'route': '/log'},
+              });
+              setState(() {});
+            },
+          ),
+
+          const SizedBox(height: 8),
           Card(
             child: SwitchListTile(
               title: const Text('Subscribe to topic demo-all'),

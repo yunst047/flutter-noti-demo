@@ -45,6 +45,19 @@ Future<void> main() async {
   // work with no Firebase at all, and a missing google-services.json should
   // leave the local-notification demos usable rather than showing a black
   // screen.
+  // Deep links are routed here rather than inside PushService, so the service
+  // stays unaware of the router. Guarded against unknown routes: a payload is
+  // attacker-influenced input in principle, and go_router throws on a route it
+  // does not recognise.
+  push.onDeepLink = (route) {
+    const known = {'/', '/permissions', '/local', '/push', '/log'};
+    if (!known.contains(route)) {
+      NotiLog.instance.add('push', 'deep link ignored', 'unknown route $route');
+      return;
+    }
+    _router.go(route);
+  };
+
   try {
     await push.init();
   } catch (e) {

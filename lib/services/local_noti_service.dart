@@ -75,7 +75,7 @@ class LocalNotiService {
 
     await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
         iOS: DarwinInitializationSettings(
           // Permissions are requested explicitly via PermissionService so the
           // demo can show the difference between standard and provisional.

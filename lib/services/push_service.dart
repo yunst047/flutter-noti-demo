@@ -34,7 +34,7 @@ Future<void> onBackgroundMessage(RemoteMessage message) async {
   final plugin = FlutterLocalNotificationsPlugin();
   await plugin.initialize(
     settings: const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('@drawable/ic_notification'),
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -120,20 +120,48 @@ class PushService {
     // Background, notification tapped.
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
       NotiLog.instance.add('push', 'opened from background', _describe(m));
+      _route(m);
     });
 
-    // Terminated: the tap that launched the process is delivered only here.
+    // Terminated: the tap that launched the process is delivered only here, and
+    // nowhere else. Skipping this call loses precisely the deep link users
+    // notice — the one that opened the app from cold.
     final initial = await messaging.getInitialMessage();
     if (initial != null) {
       NotiLog.instance.add('push', 'opened from terminated', _describe(initial));
+      _route(initial);
     }
+  }
+
+  /// Where a deep link should navigate to. Set by main() so this service does
+  /// not need to know about the router.
+  void Function(String route)? onDeepLink;
+
+  void _route(RemoteMessage m) {
+    final route = routeFor(m);
+    if (route == null) return;
+    NotiLog.instance.add('push', 'deep link', route);
+    onDeepLink?.call(route);
   }
 
   /// A data-only message displays nothing by itself — the app must post a local
   /// notification. That is the whole trade-off being demonstrated: full control
   /// over the UI, at the cost of the OEM being free to kill the process first.
-  void _onForegroundMessage(RemoteMessage m) {
+  Future<void> _onForegroundMessage(RemoteMessage m) async {
     NotiLog.instance.add('push', 'foreground', _describe(m));
+
+    switch (m.data['type']) {
+      // Phase 3: carries no content, only a signal to go and fetch.
+      case 'silent_fetch':
+        await handleSilentFetch(m.data['fetchPath'] ?? '/api/inbox');
+        return;
+      // Buttons cannot ride on a notification message — the OS draws those and
+      // ignores anything the app would attach — so this arrives as data and is
+      // rebuilt locally with actions.
+      case 'actions':
+        await _localNoti.showWithActions();
+        return;
+    }
 
     if (m.notification == null && m.data.isNotEmpty) {
       _localNoti.showFromPush(
@@ -141,6 +169,53 @@ class PushService {
         body: m.data['body'] ?? jsonEncode(m.data),
       );
     }
+  }
+
+  /// Silent push → fetch → display.
+  ///
+  /// The content never travels through FCM. It therefore cannot go stale
+  /// between send and display, is not bound by the 4KB payload cap, and is not
+  /// visible to Google in transit. This is the pattern production apps actually
+  /// use, and the reason silent push exists.
+  Future<void> handleSilentFetch(String path) async {
+    if (_baseUrl.isEmpty) {
+      NotiLog.instance.add('push', 'silent fetch skipped', 'API_BASE_URL not set');
+      return;
+    }
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl$path'),
+        headers: {'X-Demo-Key': _apiKey},
+      );
+      if (res.statusCode != 200) {
+        NotiLog.instance.add('push', 'silent fetch failed', 'HTTP ${res.statusCode}');
+        return;
+      }
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final items = (body['items'] as List).cast<dynamic>();
+      NotiLog.instance.add('push', 'silent fetch ok', '${items.length} item(s) from $path');
+
+      for (final raw in items) {
+        final item = raw as Map<String, dynamic>;
+        await _localNoti.showFromPush(
+          title: item['title'] as String? ?? 'Inbox',
+          body: item['body'] as String? ?? '',
+        );
+      }
+    } catch (e) {
+      NotiLog.instance.add('push', 'silent fetch error', '$e');
+    }
+  }
+
+  /// Route a deep link carried in `data`.
+  ///
+  /// The route travels in `data` rather than `notification` because data
+  /// survives on every platform and in every app state. If it rode only in the
+  /// notification block, the OS would draw the message and hand the app nothing
+  /// to route with.
+  String? routeFor(RemoteMessage m) {
+    final route = m.data['route'];
+    return (route is String && route.startsWith('/')) ? route : null;
   }
 
   String _describe(RemoteMessage m) {
