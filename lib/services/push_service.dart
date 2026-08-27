@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
 import 'local_noti_service.dart';
@@ -19,6 +20,44 @@ import 'noti_log.dart';
 Future<void> onBackgroundMessage(RemoteMessage message) async {
   await Firebase.initializeApp();
   debugPrint('background push: ${message.messageId} data=${message.data}');
+
+  // A data-only message displays nothing on its own. In the foreground the app
+  // draws it; without this, backgrounding the app made data-only pushes vanish
+  // silently even though they were delivered — which is the failure mode this
+  // demo exists to make visible, not to reproduce by accident.
+  if (message.notification != null || message.data.isEmpty) return;
+
+  // This isolate shares nothing with the one running the app, so the plugin
+  // instance from main() does not exist here and has to be rebuilt. The
+  // channels themselves already exist — they are owned by the OS, not the
+  // isolate — so demo_high can be reused as-is.
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    settings: const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      ),
+    ),
+  );
+
+  await plugin.show(
+    id: 21,
+    title: message.data['title'] ?? 'Data message',
+    body: message.data['body'] ?? jsonEncode(message.data),
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        LocalNotiService.channelHigh,
+        'High importance',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    ),
+    payload: 'push:data:background',
+  );
 }
 
 class PushService {
