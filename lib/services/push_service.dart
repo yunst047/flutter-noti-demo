@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,6 +27,32 @@ Future<void> onBackgroundMessage(RemoteMessage message) async {
   // silently even though they were delivered — which is the failure mode this
   // demo exists to make visible, not to reproduce by accident.
   if (message.notification != null || message.data.isEmpty) return;
+
+  // Dispatch on type exactly as the foreground handler does.
+  //
+  // Without this the isolate fell through to the generic branch below, whose
+  // body is jsonEncode(data) — so a silent push, which by definition carries no
+  // display text, rendered its own raw payload on screen:
+  //   {"type":"silent_fetch","fetchPath":"/api/inbox"}
+  // Correct in the foreground, garbage in the background.
+  switch (message.data['type']) {
+    case 'silent_fetch':
+      await _backgroundSilentFetch(
+        message.data['fetchPath'] ?? '/api/inbox',
+      );
+      return;
+    case 'deeplink':
+      // The OS already drew the notification message; the route is handled on
+      // tap, so there is nothing to display here.
+      return;
+
+    case 'delivery_step':
+      // Drives the Live Update rather than posting a notification. The
+      // MethodChannel is addressed directly because this isolate has no access
+      // to the LiveUpdateService instance main() created.
+      await _backgroundDeliveryStep(message.data);
+      return;
+  }
 
   // This isolate shares nothing with the one running the app, so the plugin
   // instance from main() does not exist here and has to be rebuilt. The
@@ -58,6 +85,84 @@ Future<void> onBackgroundMessage(RemoteMessage message) async {
     ),
     payload: 'push:data:background',
   );
+}
+
+/// Silent-push fetch, running in the background isolate.
+///
+/// Duplicated rather than shared with PushService.handleSilentFetch because
+/// that instance does not exist here — the isolate has its own memory and no
+/// access to anything main() constructed. The compile-time dart-defines below
+/// ARE available, since they are baked in at build time rather than held in
+/// instance state.
+@pragma('vm:entry-point')
+Future<void> _backgroundSilentFetch(String path) async {
+  const baseUrl = String.fromEnvironment('API_BASE_URL');
+  const apiKey = String.fromEnvironment('API_KEY', defaultValue: 'dev');
+  if (baseUrl.isEmpty) return;
+
+  try {
+    final res = await http.get(
+      Uri.parse('$baseUrl$path'),
+      headers: {'X-Demo-Key': apiKey},
+    );
+    if (res.statusCode != 200) {
+      debugPrint('background silent fetch failed: HTTP ${res.statusCode}');
+      return;
+    }
+    final items = (jsonDecode(res.body) as Map<String, dynamic>)['items'] as List;
+
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+      ),
+    );
+
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i] as Map<String, dynamic>;
+      await plugin.show(
+        id: 22 + i,
+        title: item['title'] as String? ?? 'Inbox',
+        body: item['body'] as String? ?? '',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            LocalNotiService.channelHigh,
+            'High importance',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        payload: 'push:silent:background',
+      );
+    }
+    debugPrint('background silent fetch: displayed ${items.length} item(s)');
+  } catch (e) {
+    debugPrint('background silent fetch error: $e');
+  }
+}
+
+/// Advances the Android Live Update from the background isolate.
+@pragma('vm:entry-point')
+Future<void> _backgroundDeliveryStep(Map<String, dynamic> data) async {
+  if (!Platform.isAndroid) return;
+  const channel = MethodChannel('noti_demo/live_update');
+  final index = int.tryParse('${data['index'] ?? '1'}') ?? 1;
+  try {
+    await channel.invokeMethod<void>(index <= 1 ? 'start' : 'update', {
+      'step': index - 1,
+      'title': 'Order ${data['orderId'] ?? ''}',
+      'eta': '${data['eta'] ?? ''}',
+    });
+    debugPrint('background delivery step $index applied');
+  } catch (e) {
+    debugPrint('background delivery step failed: $e');
+  }
 }
 
 class PushService {
@@ -137,6 +242,10 @@ class PushService {
   /// not need to know about the router.
   void Function(String route)? onDeepLink;
 
+  /// Server-driven delivery step. Wired in main() to the Live Update service,
+  /// so this class stays unaware of the platform channel.
+  Future<void> Function(Map<String, dynamic> data)? onDeliveryStep;
+
   void _route(RemoteMessage m) {
     final route = routeFor(m);
     if (route == null) return;
@@ -160,6 +269,14 @@ class PushService {
       // rebuilt locally with actions.
       case 'actions':
         await _localNoti.showWithActions();
+        return;
+
+      // Server-driven delivery steps drive the Live Update, they do not post a
+      // notification of their own. The payload carries a title but no body, so
+      // falling through to the generic branch rendered jsonEncode(data) — the
+      // raw payload — on screen once per step.
+      case 'delivery_step':
+        await onDeliveryStep?.call(m.data);
         return;
     }
 
