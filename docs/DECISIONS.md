@@ -103,12 +103,27 @@ The CI user should be a dedicated `noti-demo-ci` IAM user limited to
 
 ## App
 
-### Bundle ID `com.yunst047.notidemo`
+### The two platforms deliberately use different IDs
 
-Chosen so the iOS Widget Extension can nest beneath it as
-`com.yunst047.notidemo.DeliveryWidget`. Live Activities silently fail if the extension's
-bundle ID is not a child of the main one, and the name has no underscores so the Android
-`applicationId` and the iOS bundle ID are identical.
+| Platform | ID |
+|---|---|
+| Android `applicationId` | `com.f0h.fltnotidemo` |
+| iOS bundle ID | `com.f0h.flt-noti-demo` |
+| iOS widget extension | `com.f0h.flt-noti-demo.DeliveryWidget` |
+
+Not an oversight. Android `applicationId` segments accept only letters, digits and
+underscores — hyphens are rejected outright. iOS bundle IDs accept hyphens but **not**
+underscores. There is therefore no hyphenated name legal on both, and the requested
+`com.f0h.flt-noti-demo` could only be honoured on iOS.
+
+The widget extension still nests under the iOS bundle ID, which is what matters: Live
+Activities silently fail if the extension's ID is not a child of the app's.
+
+**Consequence: Firebase needs two separate app registrations**, one per ID. Registering
+one and pointing both platforms at it produces `SENDER_ID_MISMATCH` from FCM — an error
+that reads like a credentials problem rather than a naming one.
+
+A single shared ID (`com.f0h.fltnotidemo` everywhere) would have avoided the split.
 
 ### Backend URL is injected, never hardcoded
 
@@ -153,5 +168,45 @@ Full-parallelism compilation of the AWS SDK exhausts the pagefile on this machin
 | Item | Status |
 |---|---|
 | All iOS code | **Written, never built or run.** No Mac available. Do not mark verified on reasoning alone. |
-| Terraform in `infra/` | **Never `fmt`'d, `validate`d or applied.** `terraform.exe` is blocked by an Application Control policy on this machine. |
+| Terraform in `infra/` | ✅ Applied — 10 resources live. |
+| Lambda Function URL | ⚠️ Returns 403; see below. The function itself works on direct invoke. |
 | Phase 4 Live Updates | Cannot be verified on the S21 (API 35). Needs an API 36.1 emulator. |
+| Custom notification sound on iOS | `demo_chime.wav` exists only under `android/`. iOS needs it added to the Xcode bundle. |
+
+### Correction: Terraform was never blocked
+
+An earlier note here claimed an Application Control policy blocked `terraform.exe`. That
+was wrong. The policy blocks the **unsigned chocolatey shim** at
+`chocolatey\bin\terraform.exe`; the HashiCorp-signed binary at
+`chocolatey\lib\terraform\tools\terraform.exe` runs normally. Invoke that path directly.
+
+### The Function URL 403 is an account setting, not a config error
+
+`terraform apply` succeeds and every resource is created correctly — resource policy
+grants `lambda:InvokeFunctionUrl` to `*`, `AuthType` is `NONE` — yet the URL returns
+`403 AccessDeniedException`.
+
+AWS accounts created since roughly 2024 enable account-level **Block Public Access for
+Lambda** by default, which rejects `AuthType NONE` function URLs before the request
+reaches the function. It cannot be changed from Terraform or the AWS CLI (aws-cli 2.36
+has no such operation): **Lambda console → Account settings → Block public access**.
+
+Confirm the function is healthy independently of the URL:
+
+```bash
+aws lambda invoke --function-name noti-demo-api --payload <base64 event> out.json
+```
+
+This account also reports `ConcurrentExecutions: 10` against a normal default of 1000 —
+a new-account restriction, fine for a demo but worth knowing.
+
+### Android sound and vibration are per-channel, not per-notification
+
+Five separate channels exist (`demo_silent`, `demo_sound_only`, `demo_vibrate_only`,
+`demo_custom_sound`, `demo_long_vibrate`) because on Android 8+ sound and vibration are
+fixed when a channel is **created**. Setting `playSound: false` on an individual
+notification is ignored, and recreating the channel with new settings does not reliably
+take effect either — Android deliberately lets the user own how noisy an app may be.
+
+The "Try to force silence" button in the Local notifications screen demonstrates this
+failing on purpose. iOS has no channel model, so the same flag works there.

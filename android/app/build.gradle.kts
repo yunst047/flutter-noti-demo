@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.yunst047.notidemo"
+    namespace = "com.f0h.fltnotidemo"
     compileSdk = flutter.compileSdkVersion
 
     // Flutter defaults to NDK 28.2.13676358, which is not installed here. The
@@ -32,7 +32,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.yunst047.notidemo"
+        applicationId = "com.f0h.fltnotidemo"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

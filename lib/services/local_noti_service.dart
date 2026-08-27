@@ -34,7 +34,34 @@ class LocalNotiService {
   static const channelProgress = 'demo_progress';
   static const channelCall = 'demo_call';
 
+  // Sound and vibration channels.
+  //
+  // On Android 8+ these are properties of the CHANNEL, locked in when the
+  // channel is first created. Setting playSound or vibrationPattern on an
+  // individual notification does nothing once the channel exists, and even
+  // deleting and recreating the channel with new settings does not reliably
+  // take effect — Android remembers the user's overrides deliberately, so the
+  // app cannot claw back control of how noisy it is allowed to be.
+  //
+  // The only way to offer genuinely different sounds is a separate channel per
+  // variant, which is exactly why there are five of them here.
+  static const channelSilent = 'demo_silent';
+  static const channelSoundOnly = 'demo_sound_only';
+  static const channelVibrateOnly = 'demo_vibrate_only';
+  static const channelCustomSound = 'demo_custom_sound';
+  static const channelLongVibrate = 'demo_long_vibrate';
+
   bool _ready = false;
+
+  /// Alternating wait/vibrate durations in milliseconds, starting with a WAIT.
+  /// Getting that order backwards is the usual reason a pattern "feels wrong".
+  ///
+  /// Short-short-short, long-long-long, short-short-short.
+  static final Int64List _sosPattern = Int64List.fromList(<int>[
+    0, 150, 100, 150, 100, 150, // S
+    300, 400, 150, 400, 150, 400, // O
+    300, 150, 100, 150, 100, 150, // S
+  ]);
 
   Future<void> init(void Function(NotificationResponse) onTap) async {
     if (_ready) return;
@@ -76,8 +103,10 @@ class LocalNotiService {
         >();
     if (android == null) return;
 
-    const channels = [
-      AndroidNotificationChannel(
+    // Not const: the custom-sound and vibration-pattern channels carry runtime
+    // values.
+    final channels = <AndroidNotificationChannel>[
+      const AndroidNotificationChannel(
         channelHigh,
         'High importance',
         description: 'Heads-up banner with sound',
@@ -106,6 +135,55 @@ class LocalNotiService {
         'Incoming call',
         description: 'Full-screen incoming call style',
         importance: Importance.max,
+      ),
+
+      // --- sound / vibration variants -------------------------------------
+      // Importance stays high across all of these so the only variable is the
+      // sound and vibration configuration.
+      AndroidNotificationChannel(
+        channelSilent,
+        'Silent',
+        description: 'High importance, but no sound and no vibration',
+        importance: Importance.high,
+        playSound: false,
+        enableVibration: false,
+      ),
+      AndroidNotificationChannel(
+        channelSoundOnly,
+        'Sound only',
+        description: 'Default sound, vibration suppressed',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: false,
+      ),
+      AndroidNotificationChannel(
+        channelVibrateOnly,
+        'Vibrate only',
+        description: 'Vibration, no sound',
+        importance: Importance.high,
+        playSound: false,
+        enableVibration: true,
+      ),
+      AndroidNotificationChannel(
+        channelCustomSound,
+        'Custom sound',
+        description: 'Plays res/raw/demo_chime.wav instead of the system sound',
+        importance: Importance.high,
+        // Referenced WITHOUT the file extension. Including ".wav" here makes
+        // Android fail to resolve the resource and fall back to silence, with
+        // nothing logged to explain it.
+        sound: const RawResourceAndroidNotificationSound('demo_chime'),
+        playSound: true,
+      ),
+      AndroidNotificationChannel(
+        channelLongVibrate,
+        'Custom vibration pattern',
+        description: 'Long SOS-like pattern, no sound',
+        importance: Importance.high,
+        playSound: false,
+        enableVibration: true,
+        // Alternating wait/vibrate durations in ms, starting with a wait.
+        vibrationPattern: _sosPattern,
       ),
     ];
 
@@ -427,6 +505,70 @@ class LocalNotiService {
       payload: 'demo:fullscreen',
     );
     NotiLog.instance.add('local', 'fullScreenIntent', 'id=12');
+  }
+
+  // ------------------------------------------ 13. sound & vibration
+
+  /// Fires on one of the sound/vibration channels.
+  ///
+  /// Same importance across all of them, so the only thing that changes is how
+  /// the device announces it.
+  Future<void> showSoundVariant(String channelId, String label) async {
+    await _plugin.show(
+      id: 14,
+      title: 'Sound / vibration: $label',
+      body: 'Same importance, different channel configuration',
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelId,
+          label,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          // iOS is per-notification, not per-channel — the entire Android
+          // channel model has no equivalent here.
+          presentSound: channelId != channelSilent &&
+              channelId != channelVibrateOnly &&
+              channelId != channelLongVibrate,
+          sound: channelId == channelCustomSound ? 'demo_chime.wav' : null,
+        ),
+      ),
+      payload: 'demo:sound:$channelId',
+    );
+    NotiLog.instance.add('local', 'soundVariant', channelId);
+  }
+
+  /// Demonstrates that per-notification sound settings are ignored once the
+  /// channel exists.
+  ///
+  /// This posts to the ordinary high-importance channel while explicitly asking
+  /// for silence and no vibration. On Android 8+ it will still make noise,
+  /// because the channel decides — not the notification. This is the single
+  /// most common "why won't it go quiet" bug.
+  Future<void> showChannelOverrideAttempt() async {
+    await _plugin.show(
+      id: 15,
+      title: 'Trying to force silence',
+      body: 'playSound: false is set here, but the channel wins on Android 8+',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelHigh,
+          'High importance',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: false, // ignored: channel demo_high was created with sound
+          enableVibration: false, // also ignored
+        ),
+        iOS: DarwinNotificationDetails(presentSound: false), // this DOES work
+      ),
+      payload: 'demo:override',
+    );
+    NotiLog.instance.add(
+      'local',
+      'channelOverrideAttempt',
+      'expect sound on Android despite playSound:false',
+    );
   }
 
   // ------------------------------------------- 12. iOS interruption levels

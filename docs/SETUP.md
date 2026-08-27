@@ -16,10 +16,20 @@ work with no Firebase and no AWS. Start this when you want Phase 2 (push).
 
 Unblocks: Phase 2 push on the S21.
 
+> **The two platforms use different IDs.** Android rejects hyphens in an
+> `applicationId`; iOS bundle IDs allow them. So Firebase needs **two separate app
+> registrations**, and mixing them up produces a `SENDER_ID_MISMATCH` from FCM.
+>
+> | Platform | ID |
+> |---|---|
+> | Android `applicationId` | **`com.f0h.fltnotidemo`** (no hyphens) |
+> | iOS bundle ID | **`com.f0h.flt-noti-demo`** (hyphens) |
+> | iOS widget extension | `com.f0h.flt-noti-demo.DeliveryWidget` |
+
 - [ ] Create a project at <https://console.firebase.google.com>
 - [ ] **Project settings → Your apps → Add app → Android**
-- [ ] Android package name: **`com.yunst047.notidemo`** — must match exactly, this is
-      the `applicationId` in `android/app/build.gradle.kts`
+- [ ] Android package name: **`com.f0h.fltnotidemo`** — must match exactly, this is
+      the `applicationId` in `android/app/build.gradle.kts`. **No hyphens.**
 - [ ] Download **`google-services.json`** → place at **`android/app/google-services.json`**
       (gitignored)
 - [ ] Install the FlutterFire CLI and generate the options file:
@@ -55,18 +65,33 @@ Manager; a local copy is only for `FCM_CREDENTIALS_FILE` during development.
 
 ---
 
-## C. AWS  ⏸ blocked
+## C. AWS  ✅ mostly done
 
 Unblocks: the deployed Function URL, so the app works away from a USB cable.
 
-> **Currently blocked:** `terraform.exe` is blocked by an Application Control policy on
-> this machine. Get it allowlisted before starting this section. The AWS CLI itself
-> works.
+> **Already applied** — 10 resources are live and both Lambdas have the real code.
+> One manual step remains, at the bottom of this section.
+>
+> On this machine, invoke Terraform by its full path:
+> `C:\ProgramData\chocolatey\lib\terraform\tools\terraform.exe`. The Application Control
+> policy blocks the *unsigned chocolatey shim* in `chocolatey\bin`, not Terraform itself.
 
-- [ ] `cd infra && cp terraform.tfvars.example terraform.tfvars`, fill in
+- [x] `cd infra && cp terraform.tfvars.example terraform.tfvars`, fill in
       `firebase_project_id` and an `api_key` (`openssl rand -hex 24`)
-- [ ] `terraform init && terraform plan` — read-only, confirms IAM and table shape
-- [ ] `terraform apply`
+- [x] `terraform init && terraform plan` — read-only, confirms IAM and table shape
+- [x] `terraform apply`
+
+- [ ] **Turn off Block Public Access** — the one step left, and the reason the Function
+      URL currently returns `403 AccessDeniedException`:
+      **Lambda console → Account settings → Block public access**
+
+      Accounts created since ~2024 have this on by default. It rejects `AuthType NONE`
+      function URLs before they reach the function, no matter what the resource policy
+      says, and it cannot be changed from Terraform or the AWS CLI. Everything else is
+      already correct — `aws lambda invoke` against the function returns 200.
+
+- [ ] Set `firebase_project_id` in `terraform.tfvars` once you have it from section A,
+      then `terraform apply` again to push it into the Lambda environment.
 - [ ] Populate the secret **out of band** — Terraform creates it empty on purpose, so the
       private key never enters Terraform state:
       ```bash
@@ -93,7 +118,7 @@ Android work.
 
 ### D.1 Apple Developer portal
 
-- [ ] **Identifiers → App ID** for `com.yunst047.notidemo` → enable **Push Notifications**
+- [ ] **Identifiers → App ID** for `com.f0h.flt-noti-demo` → enable **Push Notifications**
       → Save. The Widget Extension does **not** need this ticked.
 - [ ] **Keys → +** → name it → enable **Apple Push Notifications service (APNs)** →
       Register
@@ -107,7 +132,7 @@ team and never expires.
 
 ### D.2 Firebase — iOS
 
-- [ ] Add an iOS app to the same Firebase project, bundle ID `com.yunst047.notidemo`
+- [ ] Add an iOS app to the same Firebase project, bundle ID `com.f0h.flt-noti-demo`
 - [ ] `GoogleService-Info.plist` → **drag into Xcode and tick target membership = Runner**.
       Copying the file into the folder is not enough; it must be in the target.
 - [ ] **Project settings → Cloud Messaging → Apple app configuration → upload the APNs
@@ -123,7 +148,7 @@ team and never expires.
       and **Background fetch**
 - [ ] `Info.plist` → `NSSupportsLiveActivities = YES`
 - [ ] Widget Extension bundle ID must be a **child** of the main bundle ID —
-      `com.yunst047.notidemo.DeliveryWidget`. Anything else and Live Activities silently
+      `com.f0h.flt-noti-demo.DeliveryWidget`. Anything else and Live Activities silently
       will not work.
 - [ ] App Group shared by both the Runner and widget targets
 

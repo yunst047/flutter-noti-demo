@@ -84,6 +84,57 @@ class LocalNotiScreen extends StatelessWidget {
             ),
           ]),
 
+          _Group('Sound & vibration', [
+            _Demo(
+              'Silent',
+              'High importance, no sound, no vibration',
+              () => localNoti.showSoundVariant(
+                LocalNotiService.channelSilent,
+                'Silent',
+              ),
+            ),
+            _Demo(
+              'Sound only',
+              'Default sound, vibration suppressed',
+              () => localNoti.showSoundVariant(
+                LocalNotiService.channelSoundOnly,
+                'Sound only',
+              ),
+            ),
+            _Demo(
+              'Vibrate only',
+              'Vibration, no sound',
+              () => localNoti.showSoundVariant(
+                LocalNotiService.channelVibrateOnly,
+                'Vibrate only',
+              ),
+            ),
+            _Demo(
+              'Custom sound',
+              'Plays res/raw/demo_chime.wav instead of the system sound',
+              () => localNoti.showSoundVariant(
+                LocalNotiService.channelCustomSound,
+                'Custom sound',
+              ),
+            ),
+            _Demo(
+              'Custom vibration pattern',
+              'Long SOS-like pattern — put the phone off silent to feel it',
+              () => localNoti.showSoundVariant(
+                LocalNotiService.channelLongVibrate,
+                'Long vibration',
+              ),
+            ),
+            _Demo(
+              '⚠ Try to force silence',
+              'Sets playSound:false on a channel created WITH sound. On '
+                  'Android 8+ it still makes noise — the channel wins, not the '
+                  'notification. iOS respects it. This is the most common '
+                  '"why won\'t it go quiet" bug.',
+              localNoti.showChannelOverrideAttempt,
+            ),
+          ]),
+
           _Group('Edge cases', [
             _Demo(
               'Full-screen intent',

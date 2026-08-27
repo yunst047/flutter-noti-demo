@@ -1,4 +1,4 @@
-package com.yunst047.notidemo
+package com.f0h.fltnotidemo
 
 import io.flutter.embedding.android.FlutterActivity
 
